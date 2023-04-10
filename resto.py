@@ -3,6 +3,7 @@ import json
 import base64
 from bs4 import BeautifulSoup 
 import re
+import mysql.connector
 
 # MAIN WEBSITE TO GET ALL RESTAURANTS IN ALL MORROCAN CITIES
 # url = "https://www.tripadvisor.com/Restaurants-g293730-Morocco.html"
@@ -12,6 +13,16 @@ import re
 # response = requests.get(url, headers={'User-Agent': "Mozilla/5.0"})
 # soup = BeautifulSoup(response.text, 'html.parser')
 
+
+mydb = mysql.connector.connect(
+  host="localhost",
+  user="root",
+  password="123456",
+  database="restaurant"
+)
+
+
+
 def get_long_lat(url):
     # Extract latitude and longitude from URL using regular expressions
     pattern = r'@(-?\d+\.\d+),(-?\d+\.\d+)'
@@ -19,7 +30,7 @@ def get_long_lat(url):
     if match:
         latitude = float(match.group(1))
         longitude = float(match.group(2))
-        return latitude,longitude
+        return longitude,latitude
     else:
         return 0,0
 
@@ -70,19 +81,32 @@ def get_restaurant_data(url):
     else : 
         decoded_str = 'N/A'
     
-    lat,long=get_long_lat(decoded_str[4:])
+    long, lat = get_long_lat(decoded_str[4:])
+ 
+    
+    mycursor = mydb.cursor()
+    
+    # Insert the restaurant data into the MySQL database
+    sql = "INSERT INTO restaurants (name, review, rating, img,longitude,latitude, details,address,status,phone) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    val_str = ','.join(imgs)
+    val_str_details=','.join(details_list)
+    val = (restaurant_name, review, rating, val_str,long,lat, val_str_details,address, status, phone)
+    mycursor.execute(sql, val)
+    
+    # Commit the changes to the database
+    mydb.commit()
 
     restaurant_details = {
         'name': restaurant_name,
-        'review' : review,
-        'rating' : rating,
-        'img':imgs,
-        'long':long,
-        'lat':lat,
-        'details' : details_list,
-        'address':address,
-        'status':status,
-        'phone':phone
+        'review': review,
+        'rating': rating,
+        'img': val_str,
+        'long': long,
+        'lat': lat,
+        'details': val_str_details,
+        'address': address,
+        'status': status,
+        'phone': phone
     }
     return restaurant_details
 
@@ -95,15 +119,18 @@ def fetch_single_page(url):
     all_city_restaurant = []
     response = requests.get(url, headers={'User-Agent': "Mozilla/5.0"})
     soup = BeautifulSoup(response.text, 'html.parser')
-    restaurants = soup.find_all('div',class_='_T')
+    restaurants = soup.find_all('div', class_='_T')
     for r in restaurants:
-        if r.find('a',class_='aWhIG _S ygNMs Vt u Gi') is not None : 
-            single_restaurant_link = "https://www.tripadvisor.com"+r.find('a',class_='aWhIG _S ygNMs Vt u Gi')['href']
+        if r.find('a', class_='aWhIG _S ygNMs Vt u Gi') is not None:
+            single_restaurant_link = "https://www.tripadvisor.com" + r.find('a', class_='aWhIG _S ygNMs Vt u Gi')['href']
             single_restaurant = {}
             single_restaurant = get_restaurant_data(single_restaurant_link)
+            
+            # Append the restaurant data to the list
             all_city_restaurant.append(single_restaurant)
-    url = "https://www.tripadvisor.com"+soup.find('a',class_="nav next rndBtn ui_button primary taLnk")['href']
+    
     return all_city_restaurant
+
     
 
 
@@ -133,6 +160,7 @@ def get_restaurants():
     print("File Saved Succefully")
     
 get_restaurants()
+
 
 
 
